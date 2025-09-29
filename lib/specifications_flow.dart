@@ -5,22 +5,27 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'logging.dart';
+import 'rfi_flow.dart';
+import 'home_dashboard.dart';
+import 'services/project_service.dart';
+import 'models/project.dart';
 
-class EditProjectPage extends StatefulWidget {
-  final String projectId;
-  
-  const EditProjectPage({super.key, required this.projectId});
+class SpecificationsFlow extends StatefulWidget {
+  const SpecificationsFlow({super.key});
 
   @override
-  State<EditProjectPage> createState() => _EditProjectPageState();
+  State<SpecificationsFlow> createState() => _SpecificationsFlowState();
 }
 
-class _EditProjectPageState extends State<EditProjectPage> {
+class _SpecificationsFlowState extends State<SpecificationsFlow> {
+  String _selectedType = 'windows';
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
-  bool _isSaving = false;
   
   // Form controllers
+  final _projectNameController = TextEditingController();
+  final _companyNameController = TextEditingController();
+  final _companyAddressController = TextEditingController();
   final _colorController = TextEditingController();
   final _ironmongeryController = TextEditingController();
   final _uValueController = TextEditingController();
@@ -35,17 +40,12 @@ class _EditProjectPageState extends State<EditProjectPage> {
   // Image storage
   Map<String, File?> _images = {};
   Map<String, String?> _imageUrls = {};
-  
-  Map<String, dynamic>? _projectData;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProjectData();
-  }
 
   @override
   void dispose() {
+    _projectNameController.dispose();
+    _companyNameController.dispose();
+    _companyAddressController.dispose();
     _colorController.dispose();
     _ironmongeryController.dispose();
     _uValueController.dispose();
@@ -59,66 +59,16 @@ class _EditProjectPageState extends State<EditProjectPage> {
     super.dispose();
   }
 
-  Future<void> _loadProjectData() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('projects')
-          .doc(widget.projectId)
-          .get();
-      
-      if (doc.exists) {
-        _projectData = doc.data() as Map<String, dynamic>;
-        _populateForm();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading project: $e')),
-        );
-      }
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _populateForm() {
-    if (_projectData == null) return;
-    
-    _colorController.text = _projectData!['color'] ?? '';
-    _ironmongeryController.text = _projectData!['ironmongery'] ?? '';
-    _uValueController.text = _projectData!['u_value'] ?? '';
-    _gValueController.text = _projectData!['g_value'] ?? '';
-    _ventsController.text = _projectData!['vents'] ?? '';
-    _acousticsController.text = _projectData!['acoustics'] ?? '';
-    _sbdController.text = _projectData!['sbd'] ?? '';
-    _pas24Controller.text = _projectData!['pas24'] ?? '';
-    _restrictorsController.text = _projectData!['restrictors'] ?? '';
-    _specialRequirementsController.text = _projectData!['special_requirements'] ?? '';
+  String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_projectData == null) {
-      return const Scaffold(
-        body: Center(child: Text('Project not found')),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Project'),
+        title: const Text('Add Project - Specifications'),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
       ),
@@ -129,7 +79,7 @@ class _EditProjectPageState extends State<EditProjectPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Project Type
+              // Project Type Selection
               Card(
                 elevation: 4,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -164,25 +114,82 @@ class _EditProjectPageState extends State<EditProjectPage> {
               
               const SizedBox(height: 24),
               
-              // Specifications Form
-              if (_projectData!['type'] == 'windows') ...[
-                Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Specifications',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+              // Project Details Card
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Project Details',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
-                        const SizedBox(height: 16),
-                        
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _projectNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Project Name',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.work_outline),
+                        ),
+                        validator: (value) =>
+                            value!.isEmpty ? 'Project name is required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _companyNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Company Name',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.business),
+                        ),
+                        validator: (value) =>
+                            value!.isEmpty ? 'Company name is required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _companyAddressController,
+                        decoration: const InputDecoration(
+                          labelText: 'Company Address',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.location_on),
+                        ),
+                        maxLines: 2,
+                        validator: (value) =>
+                            value!.isEmpty ? 'Company address is required' : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Specifications Form
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Specifications',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      if (_selectedType == 'windows') ...[
                         _buildSpecificationField(
                           'Color',
                           _colorController,
@@ -238,37 +245,14 @@ class _EditProjectPageState extends State<EditProjectPage> {
                           isRequired: true,
                         ),
                       ],
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: 24),
-              ],
-              
-              // Special Requirements
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
+                      
+                      // Special Requirements (always shown)
+                      _buildSpecificationField(
                         'Special Requirements',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _specialRequirementsController,
+                        _specialRequirementsController,
+                        Icons.note_add,
+                        isRequired: false,
                         maxLines: 4,
-                        decoration: const InputDecoration(
-                          hintText: 'Enter special requirements',
-                          border: OutlineInputBorder(),
-                        ),
                       ),
                     ],
                   ),
@@ -282,21 +266,28 @@ class _EditProjectPageState extends State<EditProjectPage> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: _isSaving ? null : () => Navigator.pop(context),
+                      onPressed: _isLoading ? null : () {
+                        // Navigate back to home dashboard
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (_) => const HomeDashboard()),
+                          (route) => false,
+                        );
+                      },
                       child: const Text('Cancel'),
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: FilledButton(
-                      onPressed: _isSaving ? null : _saveProject,
-                      child: _isSaving
+                      onPressed: _isLoading ? null : _saveProject,
+                      child: _isLoading
                           ? const SizedBox(
                               height: 20,
                               width: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Save Changes'),
+                          : const Text('Save & Continue to RFI'),
                     ),
                   ),
                 ],
@@ -309,11 +300,11 @@ class _EditProjectPageState extends State<EditProjectPage> {
   }
 
   Widget _buildTypeOption(String value, String label, IconData icon) {
-    final isSelected = _projectData!['type'] == value;
+    final isSelected = _selectedType == value;
     return InkWell(
       onTap: () {
         setState(() {
-          _projectData!['type'] = value;
+          _selectedType = value;
         });
       },
       borderRadius: BorderRadius.circular(12),
@@ -506,76 +497,92 @@ class _EditProjectPageState extends State<EditProjectPage> {
     if (!_formKey.currentState!.validate()) return;
     
     setState(() {
-      _isSaving = true;
+      _isLoading = true;
     });
     
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-      
-      // Upload new images
+      // Upload images first (still using Firebase Storage for now)
       await _uploadImages();
       
-      // Prepare update data
-      final now = DateTime.now().toIso8601String();
-      final updateData = {
-        'type': _projectData!['type'],
-        'updated_by': user.email,
-        'updated_at': now,
-        'special_requirements': _specialRequirementsController.text.trim(),
-      };
-      
-      // Add specifications if windows
-      if (_projectData!['type'] == 'windows') {
-        updateData.addAll({
-          'color': _colorController.text.trim(),
-          'ironmongery': _ironmongeryController.text.trim(),
-          'u_value': _uValueController.text.trim(),
-          'g_value': _gValueController.text.trim(),
-          'vents': _ventsController.text.trim(),
-          'acoustics': _acousticsController.text.trim(),
-          'sbd': _sbdController.text.trim(),
-          'pas24': _pas24Controller.text.trim(),
-          'restrictors': _restrictorsController.text.trim(),
-        });
-      }
-      
-      // Add new image URLs
-      updateData.addAll(_imageUrls);
-      
-      // Update project
-      await FirebaseFirestore.instance
-          .collection('projects')
-          .doc(widget.projectId)
-          .update(updateData);
-      
-      // Log the update
-      await const AuditLogger().writeLog(
-        projectId: widget.projectId,
-        action: 'update',
-        summary: 'Project specifications updated',
+      // Create project using API
+      final project = Project(
+        projectName: _projectNameController.text.trim().isNotEmpty 
+            ? _projectNameController.text.trim()
+            : 'New ${_capitalize(_selectedType)} Project',
+        companyName: _companyNameController.text.trim().isNotEmpty
+            ? _companyNameController.text.trim()
+            : 'Your Company',
+        companyAddress: _companyAddressController.text.trim().isNotEmpty
+            ? _companyAddressController.text.trim()
+            : 'Your Address',
+        projectType: _selectedType,
+        status: 'active',
+        specifications: _selectedType == 'windows' ? [
+          Specification(
+            versionNo: 1,
+            colour: _colorController.text.trim(),
+            ironmongery: _ironmongeryController.text.trim(),
+            uValue: double.tryParse(_uValueController.text.trim()) ?? 0.0,
+            gValue: double.tryParse(_gValueController.text.trim()) ?? 0.0,
+            vents: _ventsController.text.trim(),
+            acoustics: _acousticsController.text.trim(),
+            sbd: _sbdController.text.trim(),
+            pas24: _pas24Controller.text.trim(),
+            restrictors: _restrictorsController.text.trim(),
+            specialComments: _specialRequirementsController.text.trim(),
+            attachmentUrl: _imageUrls['color_image'] ?? '',
+          ),
+        ] : [],
+        rfis: [], // Don't send RFIs when creating project - they're added later
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
       );
+      
+      // Save project via API
+      final createdProject = await ProjectService.instance.createProject(project);
+      
+      if (createdProject == null) {
+        throw Exception('Failed to create project');
+      }
       
       if (!mounted) return;
       
+      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Project updated successfully'),
+          content: Text('Project created successfully!'),
           backgroundColor: Colors.green,
         ),
       );
       
-      Navigator.pop(context);
+      // Navigate to RFI flow
+      if (createdProject.id != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RFIFlow(projectId: createdProject.id.toString()),
+          ),
+        );
+      } else {
+        // If project creation failed, go back to home dashboard
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const HomeDashboard(),
+          ),
+          (route) => false,
+        );
+      }
       
     } catch (e) {
       setState(() {
-        _isSaving = false;
+        _isLoading = false;
       });
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error updating project: $e'),
+            content: Text('Error creating project: $e'),
             backgroundColor: Colors.red,
           ),
         );

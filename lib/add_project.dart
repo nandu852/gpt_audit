@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'logging.dart';
+import 'specifications_flow.dart';
+import 'home_dashboard.dart';
 
 class AddProjectPage extends StatefulWidget {
   const AddProjectPage({super.key});
@@ -110,231 +112,66 @@ class _AddProjectPageState extends State<AddProjectPage> {
         title: const Text('Add Project'),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: _testFirestoreWrite,
-            tooltip: 'Test Firestore Write',
-          ),
-        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              TextFormField(
-                controller: _company,
-                decoration: const InputDecoration(
-                  labelText: 'Company Name',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.business),
-                ),
-                validator: (value) {
-                  if (value?.trim().isEmpty ?? true) {
-                    return 'Company name is required';
-                  }
-                  return null;
-                },
+              Icon(
+                Icons.add_circle_outline,
+                size: 100,
+                color: Theme.of(context).primaryColor,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _req,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  labelText: 'Requirement(s)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.description),
-                  alignLabelWithHint: true,
-                ),
-                validator: (value) {
-                  if (value?.trim().isEmpty ?? true) {
-                    return 'Requirements are required';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _spec,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  labelText: 'Specification(s)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.settings),
-                  alignLabelWithHint: true,
-                ),
-                validator: (value) {
-                  if (value?.trim().isEmpty ?? true) {
-                    return 'Specifications are required';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              
-              // Attachments Section
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.attach_file),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Attachments',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Upload PDF, images, or documents (optional)',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Attachment List
-                      if (_attachments.isNotEmpty) ...[
-                        const Text(
-                          'Selected Files:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        ...(_attachments.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final attachment = entry.value;
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: Icon(
-                                _getFileIcon(attachment['type']),
-                                color: Theme.of(context).primaryColor,
-                              ),
-                              title: Text(attachment['name']),
-                              subtitle: Text('${_formatFileSize(attachment['size'])} • ${attachment['type']?.toUpperCase()}'),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.remove_circle, color: Colors.red),
-                                onPressed: () => _removeAttachment(index),
-                              ),
-                            ),
-                          );
-                        })),
-                        const SizedBox(height: 16),
-                      ],
-                      
-                      OutlinedButton.icon(
-                        onPressed: _addAttachment,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Files'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              
               const SizedBox(height: 24),
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+              Text(
+                'Choose Project Type',
+                style: Theme.of(context).textTheme.headlineMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Select the type of project you want to create',
+                style: Theme.of(context).textTheme.bodyLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 48),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SpecificationsFlow()),
+                    );
+                  },
+                  icon: const Icon(Icons.construction),
+                  label: const Text('Start New Project'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _saving ? null : () async {
-                      if (!Form.of(context).validate()) return;
-                      
-                      final user = FirebaseAuth.instance.currentUser;
-                      if (user == null) return;
-                      
-                      setState(() => _saving = true);
-                      try {
-                        final now = DateTime.now().toIso8601String();
-                        
-                        // Debug: Print project data before saving
-                        final projectData = {
-                          'company_name': _company.text.trim(),
-                          'requirements': _req.text.trim(),
-                          'specifications': _spec.text.trim(),
-                          'created_by': user.email,
-                          'created_at': now,
-                          'updated_by': user.email,
-                          'updated_at': now,
-                          'log_sequence': 0,
-                        };
-                        
-                        print('Saving project with data: $projectData');
-                        
-                        final doc = await FirebaseFirestore.instance.collection('projects').add(projectData);
-                        
-                        print('Project saved successfully with ID: ${doc.id}');
-
-                        // Upload attachments if any
-                        if (_attachments.isNotEmpty) {
-                          print('Uploading ${_attachments.length} attachment(s)');
-                          await _uploadAttachments(doc.id);
-                        }
-
-                        // Log project creation
-                        await const AuditLogger().writeLog(
-                          projectId: doc.id,
-                          action: 'create',
-                          summary: 'Project created with ${_attachments.length} attachment(s)',
-                        );
-
-                        print('Audit log created for project: ${doc.id}');
-
-                        if (!mounted) return;
-                        
-                        // Show success message and navigate to home
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Submitted'),
-                            backgroundColor: Colors.green,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                        
-                        // Navigate back to home screen (ProjectsPage)
-                        Navigator.of(context).popUntil((route) => route.isFirst);
-                      } catch (e) {
-                        print('Error creating project: $e');
-                        if (!mounted) return;
-                        
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error creating project: $e'),
-                            backgroundColor: Colors.red,
-                            duration: const Duration(seconds: 5),
-                          ),
-                        );
-                      } finally {
-                        if (mounted) setState(() => _saving = false);
-                      }
-                    },
-                    child: _saving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Submit'),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    // Navigate back to home dashboard
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HomeDashboard()),
+                      (route) => false,
+                    );
+                  },
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Back to Home'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
-              ]),
+              ),
             ],
           ),
         ),
