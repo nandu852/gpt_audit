@@ -49,7 +49,7 @@ Successfully integrated the Flutter app with your backend API for authentication
 ### 4. API Integration Details
 
 #### Sign In Endpoint
-- **URL**: `http://192.168.29.36:8080/auth/signin`
+- **URL**: `http://192.168.1.105:8080/auth/signin`
 - **Method**: POST
 - **Request Body**:
   ```json
@@ -87,7 +87,7 @@ Successfully integrated the Flutter app with your backend API for authentication
 ## Testing
 To test the integration:
 1. Run `flutter pub get` to install dependencies
-2. Start your backend server on `http://192.168.29.36:8080`
+2. Start your backend server on `http://192.168.1.105:8080`
 3. Run the Flutter app
 4. Use the test credentials: `admin@compass.com` / `AdminPassword123!`
 

@@ -3,19 +3,124 @@ import 'package:intl/intl.dart';
 import 'edit_project_page.dart';
 import 'audit_log_page.dart';
 import 'models/project.dart';
+import 'services/project_service.dart';
+import 'services/rfi_service.dart';
 
 class ProjectDetailsPage extends StatefulWidget {
-  final Project project;
+  final Project? project;
+  final String? projectId;
   
-  const ProjectDetailsPage({super.key, required this.project});
+  const ProjectDetailsPage({super.key, this.project, this.projectId});
 
   @override
   State<ProjectDetailsPage> createState() => _ProjectDetailsPageState();
 }
 
 class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
+  Project? _project;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProject();
+  }
+
+  Future<void> _loadProject() async {
+    print('🔍 ProjectDetailsPage: Loading project...');
+    print('🔍 Project object: ${widget.project}');
+    print('🔍 Project ID: ${widget.projectId}');
+    
+    if (widget.project != null) {
+      // If project is already provided, use it
+      print('📋 Using provided project object');
+      setState(() {
+        _project = widget.project;
+        _isLoading = false;
+      });
+    } else if (widget.projectId != null) {
+      // If only projectId is provided, fetch full project details
+      print('📋 Fetching project with ID: ${widget.projectId}');
+      try {
+        final projectId = int.tryParse(widget.projectId!);
+        print('📋 Parsed project ID: $projectId');
+        if (projectId != null) {
+          final project = await ProjectService.instance.getProjectById(projectId);
+          print('📋 Retrieved project: $project');
+          setState(() {
+            _project = project;
+            _isLoading = false;
+            _error = project == null ? 'Project not found' : null;
+          });
+        } else {
+          print('❌ Invalid project ID: ${widget.projectId}');
+          setState(() {
+            _error = 'Invalid project ID';
+            _isLoading = false;
+          });
+        }
+      } catch (e) {
+        print('💥 Error loading project: $e');
+        setState(() {
+          _error = 'Failed to load project: $e';
+          _isLoading = false;
+        });
+      }
+    } else {
+      print('❌ No project or project ID provided');
+      setState(() {
+        _error = 'No project or project ID provided';
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Project Details'),
+          backgroundColor: Theme.of(context).primaryColor,
+          foregroundColor: Colors.white,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null || _project == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Project Details'),
+          backgroundColor: Theme.of(context).primaryColor,
+          foregroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red[400],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _error ?? 'Project not found',
+                style: const TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Project Details'),
@@ -23,15 +128,8 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => EditProjectPage(projectId: widget.project.id?.toString() ?? ''),
-                ),
-              );
-            },
+            icon: const Icon(Icons.edit_attributes),
+            onPressed: () => _showStatusUpdateDialog(_project!),
           ),
           IconButton(
             icon: const Icon(Icons.history),
@@ -39,14 +137,14 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const AuditLogPage(),
+                  builder: (_) => AuditLogPage(projectId: _project?.id?.toString()),
                 ),
               );
             },
           ),
         ],
       ),
-      body: _buildProjectDetails(widget.project),
+      body: _buildProjectDetails(_project!),
     );
   }
 
@@ -315,7 +413,8 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
   }
 
   Widget _buildRFIItemFromRfi(Rfi rfi) {
-    final isCompleted = rfi.status == 'answered';
+    final isCompleted = rfi.status == 'answered' || rfi.answerValue != null;
+    final answerValue = rfi.answerValue;
     
     return Container(
       padding: const EdgeInsets.all(12),
@@ -327,19 +426,19 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
           color: isCompleted ? Colors.green.shade200 : Colors.grey.shade200,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: isCompleted ? Colors.green : Colors.grey,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            children: [
+              Icon(
+                isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: isCompleted ? Colors.green : Colors.grey,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
                   rfi.questionText,
                   style: TextStyle(
                     fontSize: 14,
@@ -347,19 +446,75 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                     color: isCompleted ? Colors.green.shade700 : Colors.grey.shade700,
                   ),
                 ),
-                if (rfi.answer != null && rfi.answer!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    rfi.answer!,
+              ),
+            ],
+          ),
+          if (answerValue != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: answerValue == 'yes' ? Colors.green.shade100 : Colors.red.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Answer: ${answerValue.toUpperCase()}',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.bold,
+                      color: answerValue == 'yes' ? Colors.green.shade700 : Colors.red.shade700,
                     ),
                   ),
-                ],
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => _showEditRfiDialog(rfi),
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: const Text('Edit'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.blue,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                ),
               ],
             ),
-          ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _answerRfi(rfi.id!, 'yes'),
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Yes'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _answerRfi(rfi.id!, 'no'),
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('No'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -478,12 +633,322 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
     switch (status.toLowerCase()) {
       case 'completed':
         return Colors.green;
-      case 'active':
+      case 'progress':
         return Colors.blue;
-      case 'pending':
-        return Colors.orange;
+      case 'not_yet_started':
+        return Colors.grey;
       default:
         return Colors.grey;
+    }
+  }
+
+  Future<void> _answerRfi(int rfiId, String answerValue) async {
+    try {
+      print('💬 Answering RFI $rfiId with: $answerValue');
+      
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final success = await RFIService.instance.answerRfi(rfiId, answerValue);
+      
+      // Hide loading indicator
+      Navigator.pop(context);
+
+      if (success) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('RFI answered: $answerValue'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Reload the project to get updated RFI data
+        await _loadProject();
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to answer RFI'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Hide loading indicator if still showing
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      print('💥 Error answering RFI: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showEditRfiDialog(Rfi rfi) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit RFI Answer'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              rfi.questionText,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Current Answer:',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: rfi.answerValue == 'yes' ? Colors.green.shade100 : Colors.red.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                rfi.answerValue?.toUpperCase() ?? 'Not answered',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: rfi.answerValue == 'yes' ? Colors.green.shade700 : Colors.red.shade700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'New Answer:',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _answerRfi(rfi.id!, 'yes');
+                    },
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Yes'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _answerRfi(rfi.id!, 'no');
+                    },
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('No'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showStatusUpdateDialog(Project project) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Update Project Status'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              project.projectName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Current Status: ${_getStatusDisplayName(project.status)}',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Select New Status:',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 12),
+            _buildStatusOption('not_yet_started', 'Not Started', Colors.grey),
+            _buildStatusOption('progress', 'In Progress', Colors.blue),
+            _buildStatusOption('completed', 'Completed', Colors.green),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusOption(String status, String displayName, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () {
+          Navigator.pop(context);
+          _updateProjectStatus(status);
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _getStatusIcon(status),
+                color: color,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                displayName,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getStatusDisplayName(String? status) {
+    switch (status) {
+      case 'not_yet_started':
+        return 'Not Started';
+      case 'progress':
+        return 'In Progress';
+      case 'completed':
+        return 'Completed';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'not_yet_started':
+        return Icons.play_circle_outline;
+      case 'progress':
+        return Icons.hourglass_empty;
+      case 'completed':
+        return Icons.check_circle;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  Future<void> _updateProjectStatus(String newStatus) async {
+    try {
+      print('🔄 Updating project status to: $newStatus');
+      
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final success = await ProjectService.instance.updateProjectStatus(_project!.id!, newStatus);
+      
+      // Hide loading indicator
+      Navigator.pop(context);
+
+      if (success) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Project status updated to: ${_getStatusDisplayName(newStatus)}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Reload the project to get updated data
+        await _loadProject();
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to update project status'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Hide loading indicator if still showing
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      print('💥 Error updating project status: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 }

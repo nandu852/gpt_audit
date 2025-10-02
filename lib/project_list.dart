@@ -101,11 +101,11 @@ class _ProjectListPageState extends State<ProjectListPage> {
                 children: [
                   _buildFilterChip('all', 'All'),
                   const SizedBox(width: 8),
-                  _buildFilterChip('active', 'Active'),
+                  _buildFilterChip('not_yet_started', 'Not Started'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('progress', 'In Progress'),
                   const SizedBox(width: 8),
                   _buildFilterChip('completed', 'Completed'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('pending', 'Pending'),
                 ],
               ),
             ),
@@ -228,7 +228,7 @@ class _ProjectListPageState extends State<ProjectListPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ProjectDetailsPage(project: project),
+              builder: (_) => ProjectDetailsPage(projectId: project.id?.toString()),
             ),
           );
         },
@@ -319,10 +319,10 @@ class _ProjectListPageState extends State<ProjectListPage> {
     switch (status.toLowerCase()) {
       case 'completed':
         return Colors.green;
-      case 'active':
+      case 'progress':
         return Colors.blue;
-      case 'pending':
-        return Colors.orange;
+      case 'not_yet_started':
+        return Colors.grey;
       default:
         return Colors.grey;
     }
@@ -348,8 +348,19 @@ class _ProjectListPageState extends State<ProjectListPage> {
               },
             ),
             RadioListTile<String>(
-              title: const Text('Active'),
-              value: 'active',
+              title: const Text('Not Started'),
+              value: 'not_yet_started',
+              groupValue: _selectedFilter,
+              onChanged: (value) {
+                setState(() {
+                  _selectedFilter = value!;
+                });
+                Navigator.pop(context);
+              },
+            ),
+            RadioListTile<String>(
+              title: const Text('In Progress'),
+              value: 'progress',
               groupValue: _selectedFilter,
               onChanged: (value) {
                 setState(() {
@@ -361,17 +372,6 @@ class _ProjectListPageState extends State<ProjectListPage> {
             RadioListTile<String>(
               title: const Text('Completed'),
               value: 'completed',
-              groupValue: _selectedFilter,
-              onChanged: (value) {
-                setState(() {
-                  _selectedFilter = value!;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            RadioListTile<String>(
-              title: const Text('Pending'),
-              value: 'pending',
               groupValue: _selectedFilter,
               onChanged: (value) {
                 setState(() {

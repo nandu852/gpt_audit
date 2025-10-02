@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'add_project.dart';
 import 'project_list.dart';
-import 'rfi_list.dart';
-import 'search_page.dart';
 import 'account_page.dart';
 import 'project_details.dart';
 import 'services/auth_service.dart';
@@ -22,11 +20,36 @@ class HomeDashboard extends StatefulWidget {
 class _HomeDashboardState extends State<HomeDashboard> {
   int _currentIndex = 0;
   late PageController _pageController;
+  List<Project> _projects = [];
+  bool _isLoadingProjects = true;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _loadProjects();
+  }
+
+  Future<void> _loadProjects() async {
+    try {
+      final projects = await ProjectService.instance.getAllProjects();
+      setState(() {
+        _projects = projects;
+        _isLoadingProjects = false;
+      });
+    } catch (e) {
+      print('Error loading projects: $e');
+      setState(() {
+        _isLoadingProjects = false;
+      });
+    }
+  }
+
+  Future<void> _refreshProjects() async {
+    setState(() {
+      _isLoadingProjects = true;
+    });
+    await _loadProjects();
   }
 
   @override
@@ -57,10 +80,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
           });
         },
         children: [
-          const _DashboardContent(),
-          const RFIListPage(),
+          _DashboardContent(projects: _projects, isLoading: _isLoadingProjects, onRefresh: _refreshProjects),
           const AddProjectPage(),
-          const SearchPage(),
           AccountPage(onSignOut: widget.onSignOut),
         ],
       ),
@@ -98,19 +119,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
               label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.assignment_outlined),
-              activeIcon: Icon(Icons.assignment),
-              label: 'RFI',
-            ),
-            BottomNavigationBarItem(
               icon: Icon(Icons.add_circle_outline),
               activeIcon: Icon(Icons.add_circle),
               label: 'Add',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.search_outlined),
-              activeIcon: Icon(Icons.search),
-              label: 'Search',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.person_outline),
@@ -125,7 +136,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
 }
 
 class _DashboardContent extends StatefulWidget {
-  const _DashboardContent();
+  final List<Project> projects;
+  final bool isLoading;
+  final VoidCallback onRefresh;
+  
+  const _DashboardContent({
+    required this.projects,
+    required this.isLoading,
+    required this.onRefresh,
+  });
 
   @override
   State<_DashboardContent> createState() => _DashboardContentState();
@@ -162,7 +181,7 @@ class _DashboardContentState extends State<_DashboardContent> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _refreshProjects();
+          widget.onRefresh();
           // Wait a bit for the refresh to complete
           await Future.delayed(const Duration(milliseconds: 500));
         },
@@ -273,8 +292,8 @@ class _DashboardContentState extends State<_DashboardContent> {
             
             const SizedBox(height: 16),
             
-            // RFI Status Card
-            _buildRFIStatusCard(context),
+            // Project Status Card
+            _buildProjectStatusCard(context, widget.projects, widget.isLoading),
             
             const SizedBox(height: 16),
             
@@ -506,7 +525,7 @@ class _DashboardContentState extends State<_DashboardContent> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ProjectDetailsPage(project: project),
+                              builder: (_) => ProjectDetailsPage(projectId: project.id?.toString()),
                             ),
                           );
                         },
@@ -604,7 +623,7 @@ class _DashboardContentState extends State<_DashboardContent> {
     );
   }
 
-  Widget _buildRFIStatusCard(BuildContext context) {
+  Widget _buildProjectStatusCard(BuildContext context, List<Project> projects, bool isLoading) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -614,7 +633,7 @@ class _DashboardContentState extends State<_DashboardContent> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'RFI Status',
+              'Project Status',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -624,16 +643,18 @@ class _DashboardContentState extends State<_DashboardContent> {
             Row(
               children: [
                 Expanded(
-                  child: _buildRFIStatusItem(
+                  child: _buildProjectStatusItem(
                     context,
-                    'Completed',
-                    Icons.check_circle,
-                    Colors.green,
+                    'Not Started',
+                    Icons.play_circle_outline,
+                    Colors.grey,
+                    projects,
+                    isLoading,
                     () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const ProjectListPage(filter: 'completed'),
+                          builder: (_) => const ProjectListPage(filter: 'not_yet_started'),
                         ),
                       );
                     },
@@ -641,16 +662,37 @@ class _DashboardContentState extends State<_DashboardContent> {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: _buildRFIStatusItem(
+                  child: _buildProjectStatusItem(
                     context,
-                    'Due',
-                    Icons.schedule,
-                    Colors.orange,
+                    'In Progress',
+                    Icons.hourglass_empty,
+                    Colors.blue,
+                    projects,
+                    isLoading,
                     () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const ProjectListPage(filter: 'pending'),
+                          builder: (_) => const ProjectListPage(filter: 'progress'),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildProjectStatusItem(
+                    context,
+                    'Completed',
+                    Icons.check_circle,
+                    Colors.green,
+                    projects,
+                    isLoading,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ProjectListPage(filter: 'completed'),
                         ),
                       );
                     },
@@ -664,15 +706,30 @@ class _DashboardContentState extends State<_DashboardContent> {
     );
   }
 
-  Widget _buildRFIStatusItem(
+  Widget _buildProjectStatusItem(
     BuildContext context,
     String title,
     IconData icon,
     Color color,
+    List<Project> projects,
+    bool isLoading,
     VoidCallback onTap,
   ) {
-    // For now, return a static count since we don't have RFI status from API yet
-    final count = 0;
+    // Calculate actual count based on project status
+    int count = 0;
+    if (!isLoading) {
+      switch (title) {
+        case 'Not Started':
+          count = projects.where((p) => p.status == 'not_yet_started').length;
+          break;
+        case 'In Progress':
+          count = projects.where((p) => p.status == 'progress').length;
+          break;
+        case 'Completed':
+          count = projects.where((p) => p.status == 'completed').length;
+          break;
+      }
+    }
         
         return InkWell(
           onTap: onTap,
@@ -715,10 +772,10 @@ class _DashboardContentState extends State<_DashboardContent> {
     switch (status?.toLowerCase()) {
       case 'completed':
         return Colors.green;
-      case 'active':
+      case 'progress':
         return Colors.blue;
-      case 'pending':
-        return Colors.orange;
+      case 'not_yet_started':
+        return Colors.grey;
       default:
         return Colors.grey;
     }

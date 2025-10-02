@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.nk.project_management"
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"

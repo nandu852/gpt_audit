@@ -106,7 +106,7 @@ class Specification {
 
   factory Specification.fromJson(Map<String, dynamic> json) {
     return Specification(
-      id: json['id'],
+      id: json['specification_id'] ?? json['id'],
       versionNo: json['version_no'] ?? 1,
       colour: json['colour'] ?? '',
       ironmongery: json['ironmongery'] ?? '',
@@ -145,6 +145,7 @@ class Rfi {
   final int? id;
   final String questionText;
   final String? answer;
+  final String? answerValue;
   final String? status;
   final DateTime? createdAt;
   final DateTime? answeredAt;
@@ -153,6 +154,7 @@ class Rfi {
     this.id,
     required this.questionText,
     this.answer,
+    this.answerValue,
     this.status,
     this.createdAt,
     this.answeredAt,
@@ -160,9 +162,10 @@ class Rfi {
 
   factory Rfi.fromJson(Map<String, dynamic> json) {
     return Rfi(
-      id: json['id'],
+      id: json['rfi_id'] ?? json['id'],
       questionText: json['question_text'] ?? '',
       answer: json['answer'],
+      answerValue: json['answer_value'],
       status: json['status'],
       createdAt: json['created_at'] != null 
           ? DateTime.parse(json['created_at']) 
@@ -178,6 +181,7 @@ class Rfi {
       'id': id,
       'question_text': questionText,
       'answer': answer,
+      'answer_value': answerValue,
       'status': status,
       'created_at': createdAt?.toIso8601String(),
       'answered_at': answeredAt?.toIso8601String(),
