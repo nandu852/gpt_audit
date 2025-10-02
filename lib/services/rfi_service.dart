@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
 class RFIService {
-  static const String _baseUrl = 'http://192.168.29.36:8080';
+  static const String _baseUrl = 'http://192.168.1.105:8080';
   static const String _rfiEndpoint = '/api/projects';
 
   static RFIService? _instance;
@@ -100,6 +100,37 @@ class RFIService {
       }
     } catch (e) {
       print('💥 Error updating project status: $e');
+      return false;
+    }
+  }
+
+  /// Answer an RFI
+  Future<bool> answerRfi(int rfiId, String answerValue) async {
+    try {
+      print('💬 Answering RFI $rfiId with value: $answerValue');
+      
+      final headers = await AuthService.instance.getAuthHeaders();
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/api/rfis/$rfiId/answer'),
+        headers: headers,
+        body: jsonEncode({
+          'answer_value': answerValue,
+        }),
+      );
+
+      print('📡 RFI answer response status: ${response.statusCode}');
+      print('📄 RFI answer response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        print('✅ RFI answered successfully');
+        return true;
+      } else {
+        print('❌ Failed to answer RFI: ${response.statusCode}');
+        print('📄 Response body: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('💥 Error answering RFI: $e');
       return false;
     }
   }

@@ -268,7 +268,7 @@ class _SearchPageState extends State<SearchPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ProjectDetailsPage(project: Project.fromJson(data)),
+              builder: (_) => ProjectDetailsPage(projectId: data['project_id']?.toString() ?? data['id']?.toString()),
             ),
           );
         },

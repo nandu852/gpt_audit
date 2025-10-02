@@ -5,7 +5,7 @@ import '../models/auth_response.dart';
 import '../models/user.dart';
 
 class AuthService {
-  static const String _baseUrl = 'http://192.168.29.36:8080';
+  static const String _baseUrl = 'http://192.168.1.105:8080';
   static const String _signInEndpoint = '/auth/signin';
   static const String _refreshEndpoint = '/auth/refresh';
   

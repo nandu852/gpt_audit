@@ -4,7 +4,7 @@ import '../models/project.dart';
 import 'auth_service.dart';
 
 class ProjectService {
-  static const String _baseUrl = 'http://192.168.29.36:8080';
+  static const String _baseUrl = 'http://192.168.1.105:8080';
   static const String _projectsEndpoint = '/api/projects';
   
   static ProjectService? _instance;
@@ -45,8 +45,15 @@ class ProjectService {
         }
         
         print('📊 Found ${projectsJson.length} projects');
-        final projects = projectsJson.map((json) => Project.fromJson(json)).toList();
+        print('📊 Raw projects JSON: $projectsJson');
+        final projects = projectsJson.map((json) {
+          print('📋 Project JSON: $json');
+          final project = Project.fromJson(json);
+          print('📋 Parsed project ID: ${project.id}');
+          return project;
+        }).toList();
         print('✅ Successfully parsed ${projects.length} projects');
+        print('📊 Final project IDs: ${projects.map((p) => p.id).toList()}');
         return projects;
       } else {
         print('❌ Failed to load projects: ${response.statusCode}');
@@ -93,19 +100,41 @@ class ProjectService {
   Future<Project?> getProjectById(int projectId) async {
     try {
       final headers = await AuthService.instance.getAuthHeaders();
+      print('🔍 Fetching project $projectId from: $_baseUrl$_projectsEndpoint/$projectId');
+      print('🔑 Auth headers: $headers');
+      
       final response = await http.get(
         Uri.parse('$_baseUrl$_projectsEndpoint/$projectId'),
         headers: headers,
       );
       
+      print('📡 Project response status: ${response.statusCode}');
+      print('📄 Project response body: ${response.body}');
+      
       if (response.statusCode == 200) {
-        return Project.fromJson(jsonDecode(response.body));
+        final responseData = jsonDecode(response.body);
+        print('📊 Project response data: $responseData');
+        
+        // Handle the nested project object from API response
+        if (responseData is Map<String, dynamic> && responseData.containsKey('project')) {
+          final projectData = responseData['project'] as Map<String, dynamic>;
+          print('📊 Found project data: $projectData');
+          return Project.fromJson(projectData);
+        } else {
+          print('❌ Unexpected project response format - no "project" key found');
+          print('📊 Available keys: ${responseData is Map ? responseData.keys.toList() : 'Not a Map'}');
+          return null;
+        }
+      } else if (response.statusCode == 404) {
+        print('❌ Project not found (404): Project ID $projectId does not exist');
+        return null;
       } else {
-        print('Failed to load project: ${response.statusCode}');
+        print('❌ Failed to load project: ${response.statusCode}');
+        print('📄 Response body: ${response.body}');
         return null;
       }
     } catch (e) {
-      print('Error loading project: $e');
+      print('💥 Error loading project: $e');
       return null;
     }
   }

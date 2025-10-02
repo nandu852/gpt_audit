@@ -506,7 +506,7 @@ class _DashboardContentState extends State<_DashboardContent> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ProjectDetailsPage(project: project),
+                              builder: (_) => ProjectDetailsPage(projectId: project.id?.toString()),
                             ),
                           );
                         },

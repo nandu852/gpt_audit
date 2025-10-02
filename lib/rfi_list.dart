@@ -205,7 +205,7 @@ class _RFIListPageState extends State<RFIListPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ProjectDetailsPage(project: project),
+              builder: (_) => ProjectDetailsPage(projectId: project.id?.toString()),
             ),
           );
         },
