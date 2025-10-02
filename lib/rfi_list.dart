@@ -379,10 +379,10 @@ class _RFIListPageState extends State<RFIListPage> {
     switch (status.toLowerCase()) {
       case 'completed':
         return Colors.green;
-      case 'active':
+      case 'progress':
         return Colors.blue;
-      case 'pending':
-        return Colors.orange;
+      case 'not_yet_started':
+        return Colors.grey;
       default:
         return Colors.grey;
     }

@@ -128,15 +128,8 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => EditProjectPage(projectId: _project!.id?.toString() ?? ''),
-                ),
-              );
-            },
+            icon: const Icon(Icons.edit_attributes),
+            onPressed: () => _showStatusUpdateDialog(_project!),
           ),
           IconButton(
             icon: const Icon(Icons.history),
@@ -144,7 +137,7 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const AuditLogPage(),
+                  builder: (_) => AuditLogPage(projectId: _project?.id?.toString()),
                 ),
               );
             },
@@ -640,10 +633,10 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
     switch (status.toLowerCase()) {
       case 'completed':
         return Colors.green;
-      case 'active':
+      case 'progress':
         return Colors.blue;
-      case 'pending':
-        return Colors.orange;
+      case 'not_yet_started':
+        return Colors.grey;
       default:
         return Colors.grey;
     }
@@ -793,5 +786,169 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
         ],
       ),
     );
+  }
+
+  void _showStatusUpdateDialog(Project project) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Update Project Status'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              project.projectName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Current Status: ${_getStatusDisplayName(project.status)}',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Select New Status:',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 12),
+            _buildStatusOption('not_yet_started', 'Not Started', Colors.grey),
+            _buildStatusOption('progress', 'In Progress', Colors.blue),
+            _buildStatusOption('completed', 'Completed', Colors.green),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusOption(String status, String displayName, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () {
+          Navigator.pop(context);
+          _updateProjectStatus(status);
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _getStatusIcon(status),
+                color: color,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                displayName,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getStatusDisplayName(String? status) {
+    switch (status) {
+      case 'not_yet_started':
+        return 'Not Started';
+      case 'progress':
+        return 'In Progress';
+      case 'completed':
+        return 'Completed';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'not_yet_started':
+        return Icons.play_circle_outline;
+      case 'progress':
+        return Icons.hourglass_empty;
+      case 'completed':
+        return Icons.check_circle;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  Future<void> _updateProjectStatus(String newStatus) async {
+    try {
+      print('🔄 Updating project status to: $newStatus');
+      
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final success = await ProjectService.instance.updateProjectStatus(_project!.id!, newStatus);
+      
+      // Hide loading indicator
+      Navigator.pop(context);
+
+      if (success) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Project status updated to: ${_getStatusDisplayName(newStatus)}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Reload the project to get updated data
+        await _loadProject();
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to update project status'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Hide loading indicator if still showing
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      print('💥 Error updating project status: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

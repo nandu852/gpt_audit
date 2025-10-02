@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../models/project.dart';
+import '../services/project_service.dart';
 
 class AuditLogPage extends StatefulWidget {
   final String? projectId; // Optional project ID to filter logs
@@ -20,15 +22,20 @@ class _AuditLogPageState extends State<AuditLogPage> {
   bool _showFilters = false;
   List<String> _projectNames = [];
   Map<String, String> _projectIdToName = {}; // Map project ID to company name
+  List<Specification> _specifications = [];
+  bool _isLoadingSpecifications = false;
+  bool _showSpecifications = false;
 
   @override
   void initState() {
     super.initState();
     _loadProjectNames();
     
-    // If a specific project ID is provided, set it as the filter
+    // If a specific project ID is provided, set it as the filter and load specifications
     if (widget.projectId != null) {
       _projectFilter = widget.projectId!;
+      _showSpecifications = true; // Auto-show specifications
+      _loadSpecifications();
     }
   }
 
@@ -78,6 +85,37 @@ class _AuditLogPageState extends State<AuditLogPage> {
     }
   }
 
+  Future<void> _loadSpecifications() async {
+    if (widget.projectId == null) return;
+    
+    setState(() {
+      _isLoadingSpecifications = true;
+    });
+    
+    try {
+      final projectId = int.tryParse(widget.projectId!);
+      if (projectId != null) {
+        print('🔍 Loading specifications for project ID: $projectId');
+        final specifications = await ProjectService.instance.getProjectSpecifications(projectId);
+        print('📋 Loaded ${specifications.length} specifications');
+        setState(() {
+          _specifications = specifications;
+          _isLoadingSpecifications = false;
+        });
+      } else {
+        print('❌ Invalid project ID: ${widget.projectId}');
+        setState(() {
+          _isLoadingSpecifications = false;
+        });
+      }
+    } catch (e) {
+      print('💥 Error loading specifications: $e');
+      setState(() {
+        _isLoadingSpecifications = false;
+      });
+    }
+  }
+
   Future<void> _selectDateRange(BuildContext context) async {
     final DateTimeRange? picked = await showDateRangePicker(
       context: context,
@@ -116,57 +154,74 @@ class _AuditLogPageState extends State<AuditLogPage> {
 
   @override
   Widget build(BuildContext context) {
+    // If project ID is provided, show only specifications
+    if (widget.projectId != null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Project Specifications'),
+          backgroundColor: Theme.of(context).primaryColor,
+          foregroundColor: Colors.white,
+        ),
+        body: _isLoadingSpecifications
+            ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Loading specifications...'),
+                  ],
+                ),
+              )
+            : _specifications.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.description_outlined,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No specifications found',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'This project has no specifications yet',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _specifications.length,
+                    itemBuilder: (context, index) {
+                      return _buildSpecificationCard(_specifications[index]);
+                    },
+                  ),
+      );
+    }
+
+    // Original audit logs view for all projects
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.projectId != null ? 'Project Logs' : 'Audit Logs'),
+        title: const Text('Audit Logs'),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
         actions: [
-          if (widget.projectId == null) // Only show filter toggle for all logs
-            IconButton(
-              icon: Icon(_showFilters ? Icons.filter_list : Icons.filter_list_outlined),
-              onPressed: () => setState(() => _showFilters = !_showFilters),
-            ),
+          IconButton(
+            icon: Icon(_showFilters ? Icons.filter_list : Icons.filter_list_outlined),
+            onPressed: () => setState(() => _showFilters = !_showFilters),
+          ),
         ],
       ),
       body: Column(
         children: [
-          // Project-specific header
-          if (widget.projectId != null) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              color: Colors.blue.shade50,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.business, color: Colors.blue.shade700),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Project: ${_projectIdToName[widget.projectId] ?? 'Loading...'}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade700,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Showing all activity logs for this project',
-                    style: TextStyle(
-                      color: Colors.blue.shade600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
           // Search Bar
           Padding(
             padding: const EdgeInsets.all(16),
@@ -191,8 +246,8 @@ class _AuditLogPageState extends State<AuditLogPage> {
             ),
           ),
 
-          // Filters Section (only for all logs view)
-          if (_showFilters && widget.projectId == null) ...[
+          // Filters Section
+          if (_showFilters) ...[
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: const EdgeInsets.all(16),
@@ -354,8 +409,8 @@ class _AuditLogPageState extends State<AuditLogPage> {
                   final data = doc.data() as Map<String, dynamic>?;
                   if (data == null) return false;
                   
-                  // Project filter (for all logs view)
-                  if (widget.projectId == null && _projectFilter.isNotEmpty) {
+                  // Project filter
+                  if (_projectFilter.isNotEmpty) {
                     final projectId = data['project_id'];
                     if (projectId == null) return false;
                     
@@ -486,7 +541,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
                               "${log['user_email']} — $formattedTime",
                               style: TextStyle(color: Colors.grey.shade600),
                             ),
-                            if (widget.projectId == null && log['project_id'] != null)
+                            if (log['project_id'] != null)
                               Text(
                                 "Project: $projectName",
                                 style: TextStyle(
@@ -675,5 +730,110 @@ class _AuditLogPageState extends State<AuditLogPage> {
       }
     }
     return formatted.join('\n');
+  }
+
+  Widget _buildSpecificationCard(Specification spec) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.article, color: Colors.blue.shade600, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Version ${spec.versionNo}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade700,
+                  fontSize: 16,
+                ),
+              ),
+              const Spacer(),
+              if (spec.attachmentUrl != null)
+                Icon(Icons.attach_file, color: Colors.green.shade600, size: 16),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _buildSpecificationDetail('Colour', spec.colour),
+          _buildSpecificationDetail('Ironmongery', spec.ironmongery),
+          _buildSpecificationDetail('U-Value', spec.uValue.toString()),
+          _buildSpecificationDetail('G-Value', spec.gValue.toString()),
+          _buildSpecificationDetail('Vents', spec.vents),
+          _buildSpecificationDetail('Acoustics', spec.acoustics),
+          _buildSpecificationDetail('SBD', spec.sbd),
+          _buildSpecificationDetail('PAS24', spec.pas24),
+          _buildSpecificationDetail('Restrictors', spec.restrictors),
+          if (spec.specialComments.isNotEmpty)
+            _buildSpecificationDetail('Special Comments', spec.specialComments),
+          if (spec.attachmentUrl != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.attach_file, color: Colors.green.shade600, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Attachment: ${spec.attachmentUrl!.split('/').last}',
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpecificationDetail(String label, String value) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade700,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: Colors.grey.shade800,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

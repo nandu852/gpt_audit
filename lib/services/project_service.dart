@@ -155,6 +155,88 @@ class ProjectService {
     }
   }
 
+  Future<bool> updateProjectStatus(int projectId, String status) async {
+    try {
+      print('🔄 Updating project $projectId status to: $status');
+      
+      final headers = await AuthService.instance.getAuthHeaders();
+      final response = await http.patch(
+        Uri.parse('$_baseUrl$_projectsEndpoint/$projectId/status'),
+        headers: headers,
+        body: jsonEncode({
+          'status': status,
+        }),
+      );
+
+      print('📡 Status update response status: ${response.statusCode}');
+      print('📄 Status update response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        print('✅ Project status updated successfully');
+        return true;
+      } else {
+        print('❌ Failed to update project status: ${response.statusCode}');
+        print('📄 Response body: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('💥 Error updating project status: $e');
+      return false;
+    }
+  }
+
+  Future<List<Specification>> getProjectSpecifications(int projectId) async {
+    try {
+      print('🔍 Fetching specifications for project $projectId from: $_baseUrl$_projectsEndpoint/$projectId/specifications');
+      
+      final headers = await AuthService.instance.getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$_baseUrl$_projectsEndpoint/$projectId/specifications'),
+        headers: headers,
+      );
+
+      print('📡 Specifications response status: ${response.statusCode}');
+      print('📄 Specifications response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        print('📊 Specifications response data: $responseData');
+        
+        // Handle the response format - could be a list or wrapped in an object
+        List<dynamic> specificationsJson;
+        if (responseData is List) {
+          specificationsJson = responseData;
+        } else if (responseData is Map<String, dynamic> && responseData.containsKey('specifications')) {
+          specificationsJson = responseData['specifications'] as List<dynamic>;
+        } else {
+          print('❌ Unexpected specifications response format');
+          return [];
+        }
+        
+        print('📊 Found ${specificationsJson.length} specifications');
+        final specifications = specificationsJson.map((json) {
+          print('📋 Specification JSON: $json');
+          final specification = Specification.fromJson(json);
+          print('📋 Parsed specification ID: ${specification.id}');
+          return specification;
+        }).toList();
+        
+        // Sort specifications by version number (latest to oldest)
+        specifications.sort((a, b) => b.versionNo.compareTo(a.versionNo));
+        
+        print('✅ Successfully parsed ${specifications.length} specifications (sorted by version)');
+        return specifications;
+      } else {
+        print('❌ Failed to load specifications: ${response.statusCode}');
+        print('📄 Response body: ${response.body}');
+        return [];
+      }
+    } catch (e) {
+      print('💥 Error loading specifications: $e');
+      return [];
+    }
+  }
+
   // Test method to debug API calls
   Future<void> testApiCall() async {
     try {
